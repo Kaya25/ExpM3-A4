@@ -25,9 +25,6 @@ These are the questions you need to be able to answer at the end of the assignme
 
 N.B. to give you a bit more data I included data from last year (Study1) and from your class (Study2). Note that synchronouns and turn-taking are the same across both studies, but the third condition is different: last year it was self-paced joint reading; this year it was the tv-series conversation. So you might want to exclude the self-paced reading (but, up to you!)
 
-```{r}
-install.packages("gridExtra")
-```
 
 ```{r}
 # Load libraries
@@ -53,6 +50,7 @@ library(nonlinearTseries)
 library(pROC)
 library(Scale)
 library(gridExtra)
+library(tidyr)
 ```
 ## Step by step suggestions to solve the assignment
 
@@ -72,6 +70,13 @@ library(gridExtra)
 d1 = read.csv("Study1_G4_T1_Synchronous.csv")
 d2 = read.csv("Study1_G4_T2_SelfPaced.csv")
 d3 = read.csv("Study1_G4_T3_TurnTaking.csv")
+```
+
+```{r}
+# Transform from wide to long format
+d1_long1 = gather(d1, subject, respiration, Resp1:Resp2)
+d1_long2 <- gather(d1, subject, ECG, ECG1:ECG2)
+d1_long3 <- gather(d1, subject, HR, HR1:HR2)
 ```
 
 ```{r}
@@ -114,6 +119,57 @@ plot6 = ggplot(d3, aes(time, HR1)) +
 plot6
 
 grid.arrange(plot1, plot2, plot3, plot4, plot5, plot6, ncol=6)
+```
+
+```{r}
+files = list.files("~/AU/Experimental Methods III/Assignments/ExpM3-A4/CleanData")
+
+# Loop to downsample the datafiles
+for(file in files){
+  datafile <- read.csv(file)
+  datafile = datafile %>%
+    group(n = 100, method = 'greedy') %>%
+    dplyr::summarise(
+       time = mean(time,na.rm=T),
+       HR1 = mean(HR1,na.rm=T),
+       HR2 = mean(HR2,na.rm=T),
+       Resp1 = mean(Resp1,na.rm=T),
+       Resp2 = mean(Resp2,na.rm=T))
+  write.csv(datafile, paste0("downsampled", file))
+}
+
+# Function that removes the outliers
+removeOuts <- function(ts,threshold){
+   ts[ts > (mean(ts,na.rm=T)+(threshold*sd(ts,na.rm=T))) | ts < (mean(ts,na.rm=T) - (threshold*sd(ts,na.rm=T)))] = mean(ts,na.rm=T)  
+    return(ts)
+}
+threshold=2.5
+
+# Listing all the "downsampled" files in the working directory
+downsampled <- Sys.glob('downsampled*')
+
+# Loop through the downsampled files and removing the outliers
+for(file in downsampled){
+  datafile <- read.csv(file)
+  datafile$HR1 <- removeOuts(datafile$HR1, threshold)
+  datafile$HR2 <- removeOuts(datafile$HR2, threshold)
+  datafile$Resp1 <- removeOuts(datafile$Resp1, threshold)
+  datafile$Resp2 <- removeOuts(datafile$Resp2, threshold)
+  write.csv(datafile, paste0("rmOutliers", file))
+}
+
+# Listing all the files that are both downsampled and processed with the removeOuts function
+rmfiles <- Sys.glob('rmOutliers*')
+
+# Loop through the rmFiles and scaling the files
+for(file in rmfiles){
+  d <- read.csv(file)
+  d$Resp1S=scale(d1$Resp1)  
+  d$Resp2S=scale(d1$Resp2)
+  d$HR1S=scale(d1$HR1)
+  d$HR2S=scale(d1$HR2)
+  write.csv(d, paste0("scaled", file))
+}
 ```
 
 ```{r}
